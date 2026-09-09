@@ -22,6 +22,18 @@ Each component has its own tests. Integration tests exercise the client against 
 
 The evaluation asks whether the client agent can identify the changed assumptions, recover the rationale, and choose the required work from shared evidence.
 
+See [PILOT_REPORT.md](PILOT_REPORT.md) for the observed results and [the client's assessment](client/ADAPTATION_ASSESSMENT.md) for what it recovered before editing.
+
+## Run the feature tests
+
+Each suite uses real loopback HTTP. Run from the repository root:
+
+```sh
+python3 -m unittest discover -s server/tests -v
+python3 -m unittest discover -s client/tests -v
+python3 -m unittest discover -s tests -v
+```
+
 ## Relay
 
 ```sh
@@ -31,3 +43,11 @@ PYTHONPATH=tools/relay python3 -m unittest discover -s tools/relay/tests -v
 
 For Relay tests, set `PYTHONPATH=tools/relay` or run them from `tools/relay`. See `tools/relay/docs/shared-features.md` for contribution metadata and commands. Shared Funes memory requires a separately configured Hugging Face dataset and authentication. Local bundles and credentials are not part of this repository.
 
+With `gh` and Funes on PATH, GitHub authentication, and access to the pilot's private Hugging Face dataset, reconstruct the live collaboration context:
+
+```sh
+python3 tools/relay/relay.py init --repo asutula/funes-relay-test --memory team=asutula/funes-relay-test-memory
+python3 tools/relay/relay.py continue-feature feature.json --out .relay/current
+```
+
+The pilot used Funes 1.3.0. Read `.relay/current/FEATURE.md` for the assessment and `feature-context.json` for the cited source passages. Each output folder must be new.

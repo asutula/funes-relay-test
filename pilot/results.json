@@ -1,0 +1,96 @@
+{
+  "revisions": {
+    "server": "aec4a4e6333bed7938b63b0787e8869f87af025f",
+    "client": "d207471e6d1f5dc1fa4b7373feec494f7b9f0836",
+    "contract": "aec4a4e6333bed7938b63b0787e8869f87af025f",
+    "tested_checkout": "6c19308335e8f8943b972666e3c219a4270759cb",
+    "implementation_content_matches": true
+  },
+  "before_adaptation": {
+    "phase": "client-resume-before-adaptation",
+    "captured_at": "2026-09-09T01:54:05.320419+00:00",
+    "feature_id": "list-payments",
+    "target_contract": {
+      "repo": "asutula/funes-relay-test",
+      "path": "api/openapi.json",
+      "revision": "aec4a4e6333bed7938b63b0787e8869f87af025f"
+    },
+    "integration_status": "not_verified",
+    "retrieved_evidence_count": 7,
+    "evidence_status_counts": {
+      "matched": 7
+    },
+    "warnings": [],
+    "needs_attention": [
+      "server: unresolved dependency on client: Adapt the client to contract B and run integration against this server revision.",
+      "client: targets contract b5bd91f96a, while the feature targets aec4a4e633. Inspect the diff for compatibility.",
+      "client: unresolved dependency on server: Run integration against the matching server contract.",
+      "Integration 1e20273a-daaf-4d49-b6f3-823429f33cf1: does not match the currently selected implementation and contract revisions.",
+      "Integration: Each component needs one active implemented contribution targeting the feature's contract."
+    ],
+    "handoff_urls": [
+      "https://github.com/asutula/funes-relay-test/issues/1#issuecomment-5594571563",
+      "https://github.com/asutula/funes-relay-test/issues/2#issuecomment-5594571172",
+      "https://github.com/asutula/funes-relay-test/issues/2#issuecomment-5594571782",
+      "https://github.com/asutula/funes-relay-test/issues/3#issuecomment-5594571361"
+    ]
+  },
+  "assessment_review": {
+    "captured_at": "2026-09-09T01:56:40.322631+00:00",
+    "sha256": "113efe850e1b3bc10ca826b4c53fcaab785db9d32baa2e44c779b10ba3042482",
+    "source": "client/ADAPTATION_ASSESSMENT.md",
+    "checks": {
+      "identified_contract_mismatch": true,
+      "recovered_insertion_rationale": true,
+      "distinguished_old_test_scope": true,
+      "scoped_request_and_response_changes": true,
+      "acknowledged_snapshot_limit": true
+    },
+    "basis": "Coordinator review of the assessment delivered before implementation and test changes."
+  },
+  "final": {
+    "captured_at": "2026-09-09T06:05:42.047711+00:00",
+    "integration_status": "passed_recorded",
+    "retrieved_evidence_count": 6,
+    "all_evidence_matched": true,
+    "warnings": [],
+    "needs_attention": []
+  },
+  "handoffs": [
+    {
+      "stage": "server-a",
+      "handoff_id": "671b8880-0656-479c-b8dc-96df9065fe69",
+      "url": "https://github.com/asutula/funes-relay-test/issues/2#issuecomment-5594571172"
+    },
+    {
+      "stage": "client-a",
+      "handoff_id": "1b35eebb-e0dd-4c18-93d6-c9c96a475bde",
+      "url": "https://github.com/asutula/funes-relay-test/issues/3#issuecomment-5594571361"
+    },
+    {
+      "stage": "baseline",
+      "handoff_id": "1e20273a-daaf-4d49-b6f3-823429f33cf1",
+      "url": "https://github.com/asutula/funes-relay-test/issues/1#issuecomment-5594571563"
+    },
+    {
+      "stage": "server-b",
+      "handoff_id": "a7aa639f-9b59-40c2-9392-76f4d437b607",
+      "url": "https://github.com/asutula/funes-relay-test/issues/2#issuecomment-5594571782"
+    },
+    {
+      "stage": "client-b",
+      "handoff_id": "78b8ad43-0f24-4f54-84aa-71c97aef34cd",
+      "url": "https://github.com/asutula/funes-relay-test/issues/3#issuecomment-5596655919"
+    },
+    {
+      "stage": "server-verified",
+      "handoff_id": "ecf0e35c-761c-48c6-aa98-2a60f7ff1079",
+      "url": "https://github.com/asutula/funes-relay-test/issues/2#issuecomment-5596656484"
+    },
+    {
+      "stage": "final-integration",
+      "handoff_id": "201dba76-5d84-44b4-afa2-d028c2738616",
+      "url": "https://github.com/asutula/funes-relay-test/issues/1#issuecomment-5596656898"
+    }
+  ]
+}
