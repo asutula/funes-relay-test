@@ -52,53 +52,54 @@ def scripted_api(replies):
 
 
 class ListPaymentsTests(unittest.TestCase):
-    def assert_requests(self, requests, pages, page_size):
-        self.assertEqual(len(requests), len(pages))
-        for request, page in zip(requests, pages):
+    def assert_requests(self, requests, cursors, page_size):
+        self.assertEqual(len(requests), len(cursors))
+        for request, cursor in zip(requests, cursors):
             parsed = urlsplit(request)
             self.assertEqual(parsed.path, "/payments")
-            self.assertEqual(
-                parse_qs(parsed.query),
-                {"page": [str(page)], "page_size": [str(page_size)]},
-            )
+            expected = {"page_size": [str(page_size)]}
+            if cursor is not None:
+                expected["cursor"] = [cursor]
+            self.assertEqual(parse_qs(parsed.query, keep_blank_values=True), expected)
 
     def test_collects_fixture_records_with_default_page_size(self):
         replies = [
-            (200, {"data": PAYMENTS[:2], "next_page": 2}),
-            (200, {"data": PAYMENTS[2:4], "next_page": 3}),
-            (200, {"data": PAYMENTS[4:], "next_page": None}),
+            (200, {"data": PAYMENTS[:2], "next_cursor": "second-token"}),
+            (200, {"data": PAYMENTS[2:4], "next_cursor": "third-token"}),
+            (200, {"data": PAYMENTS[4:], "next_cursor": None}),
         ]
         with scripted_api(replies) as (base_url, requests):
             self.assertEqual(list_payments(base_url), PAYMENTS)
-        self.assert_requests(requests, [1, 2, 3], 2)
+        self.assert_requests(requests, [None, "second-token", "third-token"], 2)
 
-    def test_follows_explicit_next_page_with_custom_size_and_trailing_slash(self):
+    def test_preserves_opaque_cursor_with_custom_size_and_trailing_slash(self):
+        token = "opaque +/= &?%#雪"
         replies = [
-            (200, {"data": PAYMENTS[:1], "next_page": 7}),
-            (200, {"data": PAYMENTS[1:2], "next_page": None}),
+            (200, {"data": PAYMENTS[:1], "next_cursor": token}),
+            (200, {"data": PAYMENTS[1:2], "next_cursor": None}),
         ]
         with scripted_api(replies) as (base_url, requests):
             self.assertEqual(list_payments(base_url + "/", page_size=1), PAYMENTS[:2])
-        self.assert_requests(requests, [1, 7], 1)
+        self.assert_requests(requests, [None, token], 1)
 
     def test_empty_terminal_page(self):
-        with scripted_api([(200, {"data": [], "next_page": None})]) as (url, requests):
+        with scripted_api([(200, {"data": [], "next_cursor": None})]) as (url, requests):
             self.assertEqual(list_payments(url), [])
-        self.assert_requests(requests, [1], 2)
+        self.assert_requests(requests, [None], 2)
 
     def test_empty_nonterminal_page_does_not_end_traversal(self):
         replies = [
-            (200, {"data": [], "next_page": 2}),
-            (200, {"data": PAYMENTS, "next_page": None}),
+            (200, {"data": [], "next_cursor": "second-token"}),
+            (200, {"data": PAYMENTS, "next_cursor": None}),
         ]
         with scripted_api(replies) as (url, requests):
             self.assertEqual(list_payments(url), PAYMENTS)
-        self.assert_requests(requests, [1, 2], 2)
+        self.assert_requests(requests, [None, "second-token"], 2)
 
     def test_maximum_page_size(self):
-        with scripted_api([(200, {"data": PAYMENTS, "next_page": None})]) as (url, requests):
+        with scripted_api([(200, {"data": PAYMENTS, "next_cursor": None})]) as (url, requests):
             self.assertEqual(list_payments(url, 100), PAYMENTS)
-        self.assert_requests(requests, [1], 100)
+        self.assert_requests(requests, [None], 100)
 
     def test_invalid_page_sizes_fail_before_transport(self):
         with patch("client.payments_client.urlopen") as transport:
@@ -109,26 +110,52 @@ class ListPaymentsTests(unittest.TestCase):
 
     def test_http_error_propagates_instead_of_returning_partial_results(self):
         replies = [
-            (200, {"data": PAYMENTS[:2], "next_page": 2}),
-            (400, {"error": "Invalid page"}),
+            (200, {"data": PAYMENTS[:2], "next_cursor": "second-token"}),
+            (400, {"error": "Invalid cursor"}),
         ]
         with scripted_api(replies) as (url, requests):
             with self.assertRaises(HTTPError) as raised:
                 list_payments(url)
             self.assertEqual(raised.exception.code, 400)
             raised.exception.close()
-        self.assert_requests(requests, [1, 2], 2)
+        self.assert_requests(requests, [None, "second-token"], 2)
 
-    def test_rejects_invalid_next_page_without_another_request(self):
-        for next_page in [1, 0, -1, True, "2", 1.5, {}]:
-            with self.subTest(next_page=next_page):
-                with scripted_api([(200, {"data": [], "next_page": next_page})]) as (url, requests):
-                    with self.assertRaisesRegex(ValueError, "next_page"):
+    def test_rejects_invalid_next_cursor_without_another_request(self):
+        for next_cursor in ["", 1, 0, -1, True, 1.5, {}, []]:
+            with self.subTest(next_cursor=next_cursor):
+                with scripted_api([(200, {"data": [], "next_cursor": next_cursor})]) as (url, requests):
+                    with self.assertRaisesRegex(ValueError, "next_cursor"):
                         list_payments(url)
                 self.assertEqual(len(requests), 1)
 
+    def test_rejects_repeated_cursor_without_repeating_request(self):
+        replies = [
+            (200, {"data": PAYMENTS[:2], "next_cursor": "repeat"}),
+            (200, {"data": PAYMENTS[2:4], "next_cursor": "repeat"}),
+        ]
+        with scripted_api(replies) as (url, requests):
+            with self.assertRaisesRegex(ValueError, "next_cursor"):
+                list_payments(url)
+        self.assert_requests(requests, [None, "repeat"], 2)
+
+    def test_rejects_longer_cursor_cycle(self):
+        replies = [
+            (200, {"data": [], "next_cursor": "first"}),
+            (200, {"data": [], "next_cursor": "second"}),
+            (200, {"data": [], "next_cursor": "first"}),
+        ]
+        with scripted_api(replies) as (url, requests):
+            with self.assertRaisesRegex(ValueError, "next_cursor"):
+                list_payments(url)
+        self.assert_requests(requests, [None, "first", "second"], 2)
+
     def test_rejects_missing_or_invalid_response_fields(self):
-        for payload in [[], {"data": []}, {"data": {}, "next_page": None}]:
+        for payload in [
+            [],
+            {"data": []},
+            {"data": [], "next_page": None},
+            {"data": {}, "next_cursor": None},
+        ]:
             with self.subTest(payload=payload):
                 with scripted_api([(200, payload)]) as (url, requests):
                     with self.assertRaises(ValueError):

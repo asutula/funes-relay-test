@@ -1,9 +1,27 @@
-# Client contract A
+# Client contract B handoff
 
-Implemented api/openapi.json at b5bd91f96ada6f41bb7e6e342a736b83cfdaa7ac. list_payments follows numeric next_page values, combines responses, propagates HTTP errors, and rejects repeated or invalid continuation values.
+This contribution adapts client revision `c55d7fa5b278a07504fad4bd52c883d45c5c209d` to `api/openapi.json` at `aec4a4e6333bed7938b63b0787e8869f87af025f`, contract B version 2.0.0. The agent read the pinned contract with `git show` in its isolated worktree. It did not inspect server implementation or run server/client integration.
 
-Validation: `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s client/tests -v` passed nine tests on Python 3.14.7 against an independent HTTP fixture. Tests cover full traversal, explicit continuation values, empty responses, page sizes, errors, and malformed envelopes. The initial sandbox run could not bind sockets; the authorized rerun passed. Exact execution logs are retained in the pilot's local evidence export for Funes indexing.
+## Assessment and implementation
 
-The client agent did not read the server implementation or run real server/client integration. Fixture tests establish client behavior against scripted responses. The client preserves returned records without deduplicating them; no snapshot semantics are promised by contract A.
+[ADAPTATION_ASSESSMENT.md](ADAPTATION_ASSESSMENT.md) preserves the assessment delivered before implementation or test changes. It cites the live Relay handoffs and their matched evidence. The insertion experiment and the unchanged client's HTTP 400 responses established why both request and response pagination needed to change.
 
-Next: run baseline integration and the insertion-between-requests experiment. Use shared-feature context before adapting to any later contract.
+`list_payments(base_url, page_size=2)` starts without a cursor or page parameter, passes each returned `next_cursor` unchanged through URL encoding, and stops on null. It preserves response order and records. It rejects missing, invalid, or cyclic continuation values. It does not decode cursor tokens or deduplicate payments.
+
+The function signature, module-level `urlopen`, response context manager, timeout, page-size validation, and HTTP error propagation remain compatible with the integration runner.
+
+## Verification
+
+Eleven independent HTTP fixture tests passed on Python 3.14.7 with no skips. They cover first-request cursor omission, full traversal, opaque tokens containing reserved characters and Unicode, empty pages, page-size constraints, transport errors, invalid and cyclic cursors, and rejection of the obsolete response envelope.
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s client/tests -v
+```
+
+Python 3.11 syntax checks and `git diff --check` passed. The coordinator retained exact commands, complete outputs, the assessment, and attributed historical failures in the selected client B work log for Funes memory.
+
+## Limits and integration
+
+At contribution time, actual server/client integration remained for the coordinator. The fixture deliberately uses tokens unrelated to the server's encoding to test opacity. Python 3.11 runtime behavior, timeout handling, and full Payment field validation were not tested.
+
+Contract B assumes unique immutable IDs. Earlier inserts stay outside an existing traversal; later inserts can appear. The client does not provide snapshot isolation. Run the four baseline cases and the insertion-between-responses case against the exact server/client revisions, then record the results in Relay.
