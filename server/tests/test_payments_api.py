@@ -1,3 +1,4 @@
+import base64
 import http.client
 import json
 from pathlib import Path
@@ -7,7 +8,7 @@ import sys
 import tempfile
 import threading
 import unittest
-from urllib.parse import urlsplit
+from urllib.parse import urlencode, urlsplit
 
 from server.payments_api import create_server
 
@@ -44,34 +45,49 @@ class PaymentsHTTPTests(unittest.TestCase):
         finally:
             connection.close()
 
+    def continuation(self, cursor, page_size=2):
+        return self.get("/payments?" + urlencode({"cursor": cursor, "page_size": page_size}))
+
     def test_defaults_sort_without_reordering_supplied_list(self):
         original = list(self.payments)
         status, payload = self.get("/payments")
         self.assertEqual(status, 200)
-        self.assertEqual(payload, {"data": sorted(original, key=lambda p: p["id"])[:2], "next_page": 2})
+        self.assertEqual(set(payload), {"data", "next_cursor"})
+        self.assertEqual(payload["data"], sorted(original, key=lambda p: p["id"])[:2])
+        self.assertIsInstance(payload["next_cursor"], str)
+        self.assertTrue(payload["next_cursor"])
         self.assertEqual(self.payments, original)
         self.assertIs(self.server.payments, self.payments)
 
     def test_complete_traversal_and_partial_final_page(self):
+        status, payload = self.get("/payments")
         actual = []
-        for page, expected_next, count in [(1, 2, 2), (2, 3, 2), (3, None, 1)]:
-            status, payload = self.get(f"/payments?page={page}&page_size=2")
+        for index, count in enumerate([2, 2, 1]):
             self.assertEqual(status, 200)
-            self.assertEqual(payload["next_page"], expected_next)
             self.assertEqual(len(payload["data"]), count)
             actual.extend(payload["data"])
+            if index < 2:
+                self.assertIsInstance(payload["next_cursor"], str)
+                status, payload = self.continuation(payload["next_cursor"])
+            else:
+                self.assertIsNone(payload["next_cursor"])
         self.assertEqual(actual, sorted(self.payments, key=lambda p: p["id"]))
 
-    def test_exact_page_boundary_has_no_next_page(self):
+    def test_exact_page_boundary_has_no_next_cursor(self):
         self.payments.pop()
-        self.assertEqual(self.get("/payments?page=2")[1]["next_page"], None)
+        first = self.get("/payments")[1]
+        final = self.continuation(first["next_cursor"])[1]
+        self.assertEqual(len(final["data"]), 2)
+        self.assertIsNone(final["next_cursor"])
 
-    def test_page_beyond_end_is_empty(self):
-        self.assertEqual(self.get("/payments?page=999999"), (200, {"data": [], "next_page": None}))
+    def test_no_remaining_records_returns_empty(self):
+        first = self.get("/payments")[1]
+        self.payments.clear()
+        self.assertEqual(self.continuation(first["next_cursor"]), (200, {"data": [], "next_cursor": None}))
 
     def test_empty_supplied_list_stays_empty_and_retained(self):
         self.payments.clear()
-        self.assertEqual(self.get("/payments"), (200, {"data": [], "next_page": None}))
+        self.assertEqual(self.get("/payments"), (200, {"data": [], "next_cursor": None}))
         self.assertIs(self.server.payments, self.payments)
 
     def test_new_empty_list_is_not_replaced_by_default_fixture(self):
@@ -79,30 +95,83 @@ class PaymentsHTTPTests(unittest.TestCase):
         with create_server(payments=empty) as server:
             self.assertIs(server.payments, empty)
 
-    def test_mutation_between_requests_is_visible(self):
-        self.get("/payments")
+    def test_earlier_insertion_does_not_repeat_original_records(self):
+        expected = sorted(self.payments, key=lambda p: p["id"])
+        status, payload = self.get("/payments")
+        self.assertEqual(status, 200)
+        actual = list(payload["data"])
         inserted = {"id": "pay_000", "amount_cents": 0, "currency": "USD"}
         self.payments.append(inserted)
-        self.assertEqual(self.get("/payments?page_size=1")[1], {"data": [inserted], "next_page": 2})
+        for _ in range(5):
+            if payload["next_cursor"] is None:
+                break
+            status, payload = self.continuation(payload["next_cursor"])
+            self.assertEqual(status, 200)
+            actual.extend(payload["data"])
+        self.assertIsNone(payload["next_cursor"])
+        self.assertEqual(actual, expected)
+        fresh = self.get("/payments?page_size=1")[1]
+        self.assertEqual(fresh["data"], [inserted])
+
+    def test_later_insertions_can_appear_without_snapshot_isolation(self):
+        first = self.get("/payments")[1]
+        inserted = {"id": "pay_002a", "amount_cents": 7, "currency": "USD"}
+        self.payments.append(inserted)
+        status, payload = self.continuation(first["next_cursor"])
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["data"][0], inserted)
+
+    def test_deleted_boundary_record_does_not_invalidate_cursor(self):
+        first = self.get("/payments")[1]
+        self.payments[:] = [p for p in self.payments if p["id"] != "pay_002"]
+        status, payload = self.continuation(first["next_cursor"])
+        self.assertEqual(status, 200)
+        self.assertEqual([p["id"] for p in payload["data"]], ["pay_003", "pay_004"])
+
+    def test_page_size_can_change_during_traversal(self):
+        first = self.get("/payments?page_size=1")[1]
+        status, payload = self.continuation(first["next_cursor"], page_size=100)
+        self.assertEqual(status, 200)
+        self.assertEqual([p["id"] for p in payload["data"]], ["pay_002", "pay_003", "pay_004", "pay_005"])
+        self.assertIsNone(payload["next_cursor"])
 
     def test_page_size_boundaries(self):
-        for size, count, next_page in [(1, 1, 2), (100, 5, None)]:
+        for size, count in [(1, 1), (100, 5)]:
             with self.subTest(size=size):
                 status, payload = self.get(f"/payments?page_size={size}")
                 self.assertEqual(status, 200)
                 self.assertEqual(len(payload["data"]), count)
-                self.assertEqual(payload["next_page"], next_page)
+                self.assertEqual(payload["next_cursor"] is None, size == 100)
 
-    def test_invalid_parameters_return_json_error(self):
-        invalid = ["", "0", "-1", "1.5", "abc", "%20", "1e2", "1&{name}=2"]
-        for name in ["page", "page_size"]:
-            for value in invalid:
-                with self.subTest(name=name, value=value):
-                    status, payload = self.get(f"/payments?{name}={value.format(name=name)}")
-                    self.assertEqual(status, 400)
-                    self.assertIsInstance(payload["error"], str)
-                    self.assertTrue(payload["error"])
-        self.assertEqual(self.get("/payments?page_size=101")[0], 400)
+    def test_invalid_page_size_returns_json_error(self):
+        for value in ["", "0", "-1", "1.5", "abc", "%20", "1e2", "101", "1&page_size=2"]:
+            with self.subTest(value=value):
+                status, payload = self.get(f"/payments?page_size={value}")
+                self.assertEqual(status, 400)
+                self.assertIsInstance(payload["error"], str)
+                self.assertTrue(payload["error"])
+
+    def test_obsolete_page_parameter_is_rejected(self):
+        cursor = self.get("/payments")[1]["next_cursor"]
+        for suffix in ["page", "page=", "page=1", "page=2", "page=1&" + urlencode({"cursor": cursor})]:
+            with self.subTest(suffix=suffix):
+                status, payload = self.get("/payments?" + suffix)
+                self.assertEqual(status, 400)
+                self.assertIn("page", payload["error"])
+
+    def test_invalid_cursors_return_json_error(self):
+        invalid = ["", "!", "a", "abcd", "not-a-cursor"]
+        for payload in [None, [], {}, {"v": 2, "after": "pay_002"}, {"v": True, "after": "pay_002"}, {"v": 1, "after": 2}]:
+            invalid.append(base64.urlsafe_b64encode(json.dumps(payload).encode()).decode().rstrip("="))
+        for cursor in invalid:
+            with self.subTest(cursor=cursor):
+                status, payload = self.continuation(cursor)
+                self.assertEqual(status, 400)
+                self.assertEqual(payload, {"error": "Invalid cursor"})
+        valid = self.get("/payments")[1]["next_cursor"]
+        status, payload = self.get("/payments?" + urlencode([("cursor", valid), ("cursor", valid)]))
+        self.assertEqual(status, 400)
+        self.assertEqual(payload, {"error": "Invalid cursor"})
 
     def test_unknown_path(self):
         self.assertEqual(self.get("/missing")[0], 404)
@@ -134,7 +203,7 @@ class CommandLineTests(unittest.TestCase):
                     connection.request("GET", "/payments")
                     response = connection.getresponse()
                     self.assertEqual(response.status, 200)
-                    self.assertEqual(json.loads(response.read()), {"data": records, "next_page": None})
+                    self.assertEqual(json.loads(response.read()), {"data": records, "next_cursor": None})
                 finally:
                     connection.close()
             finally:

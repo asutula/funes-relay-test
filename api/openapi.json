@@ -1,27 +1,27 @@
 {
   "openapi": "3.1.0",
-  "info": {"title": "Relay pilot payments API", "version": "1.0.0"},
+  "info": {"title": "Relay pilot payments API", "version": "2.0.0"},
   "paths": {
     "/payments": {
       "get": {
         "operationId": "listPayments",
-        "description": "Return payments ordered by id ascending. This initial contract uses one-based numeric pages. No authentication is required for this local pilot.",
+        "description": "Return payments ordered by unique, immutable id ascending. Omit cursor to start; pass each non-null next_cursor unchanged as the next request's cursor. Continuation resumes strictly after the last returned id, so records inserted at or before that boundary are outside the ongoing traversal and do not repeat original records. This is not full snapshot isolation: later insertions may appear, and deletions or record changes may affect later responses. The obsolete page parameter returns 400. No authentication is required for this local pilot.",
         "parameters": [
-          {"name": "page", "in": "query", "schema": {"type": "integer", "minimum": 1, "default": 1}},
+          {"name": "cursor", "in": "query", "required": false, "description": "Opaque continuation token from next_cursor. Clients must not interpret or construct cursors. Omit for the first request; empty, malformed, unsupported-version, or repeated cursor values return 400.", "schema": {"type": "string", "minLength": 1}},
           {"name": "page_size", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 100, "default": 2}}
         ],
         "responses": {
           "200": {
-            "description": "A page of payments; next_page is null when traversal is complete.",
+            "description": "A page of payments; next_cursor is null when traversal is complete. page_size may change between requests.",
             "content": {"application/json": {"schema": {
-              "type": "object", "required": ["data", "next_page"], "additionalProperties": false,
+              "type": "object", "required": ["data", "next_cursor"], "additionalProperties": false,
               "properties": {
                 "data": {"type": "array", "items": {"$ref": "#/components/schemas/Payment"}},
-                "next_page": {"type": ["integer", "null"], "minimum": 1}
+                "next_cursor": {"type": ["string", "null"], "minLength": 1}
               }
             }}}
           },
-          "400": {"description": "Invalid page or page_size", "content": {"application/json": {"schema": {
+          "400": {"description": "Invalid cursor or page_size, or obsolete page parameter", "content": {"application/json": {"schema": {
             "type": "object", "required": ["error"], "properties": {"error": {"type": "string"}}
           }}}}
         }

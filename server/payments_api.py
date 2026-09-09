@@ -1,6 +1,8 @@
-"""Local payments API using contract A's one-based page numbers."""
+"""Local payments API using contract B's opaque continuation cursors."""
 
 import argparse
+import base64
+import binascii
 import json
 import re
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -28,6 +30,35 @@ def _positive_integer(query, name, default, maximum=None):
     return value
 
 
+def _encode_cursor(after):
+    payload = json.dumps({"v": 1, "after": after}, separators=(",", ":")).encode("utf-8")
+    return base64.urlsafe_b64encode(payload).decode("ascii").rstrip("=")
+
+
+def _decode_cursor(query):
+    values = query.get("cursor")
+    if values is None:
+        return None
+    if len(values) != 1 or re.fullmatch(r"[A-Za-z0-9_-]+", values[0]) is None:
+        raise ValueError("Invalid cursor")
+    token = values[0]
+    try:
+        raw = base64.b64decode(token + "=" * (-len(token) % 4), altchars=b"-_", validate=True)
+        payload = json.loads(raw.decode("utf-8"))
+        if (
+            not isinstance(payload, dict)
+            or set(payload) != {"v", "after"}
+            or type(payload["v"]) is not int
+            or payload["v"] != 1
+            or not isinstance(payload["after"], str)
+            or _encode_cursor(payload["after"]) != token
+        ):
+            raise ValueError("Invalid cursor")
+    except (binascii.Error, UnicodeError, ValueError) as error:
+        raise ValueError("Invalid cursor") from error
+    return payload["after"]
+
+
 class PaymentsHandler(BaseHTTPRequestHandler):
     def _send_json(self, status, payload):
         body = json.dumps(payload).encode("utf-8")
@@ -44,18 +75,21 @@ class PaymentsHandler(BaseHTTPRequestHandler):
             return
         query = parse_qs(request.query, keep_blank_values=True)
         try:
-            page = _positive_integer(query, "page", 1)
+            if "page" in query:
+                raise ValueError("page is obsolete; use cursor")
+            after = _decode_cursor(query)
             page_size = _positive_integer(query, "page_size", 2, maximum=100)
         except ValueError as error:
             self._send_json(400, {"error": str(error)})
             return
 
         payments = sorted(self.server.payments, key=lambda payment: payment["id"])
-        start = (page - 1) * page_size
-        end = start + page_size
+        if after is not None:
+            payments = [payment for payment in payments if payment["id"] > after]
+        data = payments[:page_size]
         self._send_json(200, {
-            "data": payments[start:end],
-            "next_page": page + 1 if end < len(payments) else None,
+            "data": data,
+            "next_cursor": _encode_cursor(data[-1]["id"]) if len(payments) > page_size else None,
         })
 
 
