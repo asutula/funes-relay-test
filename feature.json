@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "id": "list-payments",
+  "parent": {
+    "repo": "asutula/funes-relay-test",
+    "issue": 1
+  },
+  "contract": {
+    "repo": "asutula/funes-relay-test",
+    "path": "api/openapi.json",
+    "revision": "b5bd91f96ada6f41bb7e6e342a736b83cfdaa7ac"
+  },
+  "components": {
+    "server": {
+      "repo": "asutula/funes-relay-test",
+      "issue": 2
+    },
+    "client": {
+      "repo": "asutula/funes-relay-test",
+      "issue": 3
+    }
+  }
+}
