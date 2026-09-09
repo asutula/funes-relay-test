@@ -2,7 +2,7 @@
 
 A real server API and Python client built by separate agents using a shared contract and Relay handoffs.
 
-This repository contains the test feature and the Relay 0.2 prototype in `tools/relay`. The initial API contract is `api/openapi.json`. All payment records are fictional test fixtures.
+This repository contains the test feature and the Relay 0.2 prototype in `tools/relay`. The initial API contract is `api/openapi.json` at commit `b5bd91f96ada6f41bb7e6e342a736b83cfdaa7ac`; `feature.json` pins the contract targeted by a later stage. All payment records are fictional test fixtures.
 
 ## Feature interfaces
 
@@ -26,7 +26,7 @@ The evaluation asks whether the client agent can identify the changed assumption
 
 ```sh
 python3 tools/relay/relay.py --help
-python3 -m unittest discover -s tools/relay/tests -v
+PYTHONPATH=tools/relay python3 -m unittest discover -s tools/relay/tests -v
 ```
 
 For Relay tests, set `PYTHONPATH=tools/relay` or run them from `tools/relay`. See `tools/relay/docs/shared-features.md` for contribution metadata and commands. Shared Funes memory requires a separately configured Hugging Face dataset and authentication. Local bundles and credentials are not part of this repository.

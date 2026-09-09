@@ -1,6 +1,6 @@
 # Server contract B handoff
 
-Based on server contract A commit `875d313e46b667d5846536b69dc3a3ff3a914ab4`. Contract B changes are uncommitted on `pilot/server` for parent review and signing.
+Based on server contract A commit `875d313e46b667d5846536b69dc3a3ff3a914ab4`. The signed contract B implementation is commit `aec4a4e6333bed7938b63b0787e8869f87af025f` on `pilot/server`.
 
 ## Why the contract changed
 
@@ -30,8 +30,8 @@ Ran 17 tests in 8.161s
 OK
 ```
 
-The exact shell invocation and complete output are in the final contract-B test entry of `server/evidence.json`.
+The parent retained the exact shell invocation and complete output in the selected contract B work log for shared Funes memory.
 
 ## Next steps
 
-Parent should review and sign these uncommitted changes, record the resulting implementation and contract revisions in Relay, and let the independent client contributor adapt using shared evidence. Then run both baseline and insertion integration cases against the exact server/client revision pair. The contract-A summary remains in commit 875d313. The parent retained its original execution logs in a separate local evidence export. server/evidence.json exports this contract-B phase only.
+Record the implementation and contract revisions in Relay, then let the independent client contributor adapt using shared evidence. Then run both baseline and insertion integration cases against the exact server/client revision pair. The contract-A summary remains in commit 875d313. The parent retained its original execution logs in a separate local evidence export. The contract B export covers this phase only.

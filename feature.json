@@ -8,7 +8,7 @@
   "contract": {
     "repo": "asutula/funes-relay-test",
     "path": "api/openapi.json",
-    "revision": "b5bd91f96ada6f41bb7e6e342a736b83cfdaa7ac"
+    "revision": "aec4a4e6333bed7938b63b0787e8869f87af025f"
   },
   "components": {
     "server": {
