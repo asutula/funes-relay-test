@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "funes-relay-prototype"
+version = "0.2.0"
+description = "Evidence-backed team handoffs over Funes and GitHub issues"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.scripts]
+relay = "relay_cli.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["relay_cli*"]

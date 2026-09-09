@@ -1,0 +1,8 @@
+[
+  {"id":"pay_001","amount_cents":1200,"currency":"USD"},
+  {"id":"pay_002","amount_cents":2500,"currency":"USD"},
+  {"id":"pay_003","amount_cents":3999,"currency":"USD"},
+  {"id":"pay_004","amount_cents":500,"currency":"USD"},
+  {"id":"pay_005","amount_cents":8300,"currency":"USD"}
+]
+
